@@ -12,6 +12,7 @@ import argparse
 from pathlib import Path
 import getpass
 import unicodedata
+from lxml import etree
 
 from dateutil.parser import parse as parse_date
 from dateutil.relativedelta import relativedelta
@@ -280,6 +281,10 @@ class Doctolib(LoginBrowser, StatesMixin):
                 if e.response.status_code != 403:
                     raise
                 else:
+                    challenge_forms = etree.HTML(e.response.text).xpath('//form[contains(@class, "challenge-form")]')
+                    if len(challenge_forms) == 1:
+                        challenge_url = challenge_forms[0].attrib['action']
+                        print('URL: %s' % challenge_url)
                     print('It seems the connection is captcha-challenged.\n'
                           'In order to pass this challenge:\n'
                           '  1. Open the Doctolib website in your local browser.\n'
@@ -287,7 +292,7 @@ class Doctolib(LoginBrowser, StatesMixin):
                           '  3. Log in and out of the web portal'
                           ' (you should be prompted with a captcha-challenge while doing so).\n'
                           '  4. Open the storage panel (dev panel) of your browser'
-                          ' and look for a cookie named "cf_clearance".'
+                          ' and look for a cookie named "cf_clearance".\n'
                           '     Provide the value of this cookie on the prompt below.\n')
                     cf_clearance_cookie = input("CloudFlare captcha clearance cookie (cf_clearance): ")
                     self.session.cookies.set('cf_clearance', cf_clearance_cookie)
