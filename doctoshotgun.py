@@ -274,7 +274,25 @@ class Doctolib(LoginBrowser, StatesMixin):
 
     def do_login(self, code):
         try:
-            self.open(self.BASEURL + '/sessions/new')
+            try:
+                self.open(self.BASEURL + '/sessions/new')
+            except ClientError as e:
+                if e.response.status_code != 403:
+                    raise
+                else:
+                    print('It seems the connection is captcha-challenged.\n'
+                          'In order to pass this challenge:\n'
+                          '  1. Open the Doctolib website in your local browser.\n'
+                          '  2. Clear the cookies of this domain.\n'
+                          '  3. Log in and out of the web portal'
+                          ' (you should be prompted with a captcha-challenge while doing so).\n'
+                          '  4. Open the storage panel (dev panel) of your browser'
+                          ' and look for a cookie named "cf_clearance".'
+                          '     Provide the value of this cookie on the prompt below.\n')
+                    cf_clearance_cookie = input("CloudFlare captcha clearance cookie (cf_clearance): ")
+                    self.session.cookies.set('cf_clearance', cf_clearance_cookie)
+                    # try again with the clearance token
+                    self.open(self.BASEURL + '/sessions/new')
         except ServerError as e:
             if e.response.status_code in [503] \
                 and 'text/html' in e.response.headers['Content-Type'] \
@@ -283,6 +301,15 @@ class Doctolib(LoginBrowser, StatesMixin):
             if e.response.status_code in [520]:
                 log('Cloudflare is unable to connect to Doctolib server. Please retry later.', color='red')
             raise
+        except ClientError as e:
+            if e.response.status_code != 403:
+                raise
+            else:
+                log('The CloudFlare clearance cookie was rejected.', color='red')
+                # Remove the invalid clearance token
+                del self.session.cookies['cf_clearance']
+            return False
+
         try:
             self.login.go(json={'kind': 'patient',
                                 'username': self.username,
